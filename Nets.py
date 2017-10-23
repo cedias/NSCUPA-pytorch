@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from collections import OrderedDict
 
 
-
 class AttentionalBiGRU(nn.Module):
 
     def __init__(self, inp_size, hid_size, dropout=0):
@@ -16,21 +15,27 @@ class AttentionalBiGRU(nn.Module):
         natt = hid_size*2
         
         self.gru = nn.GRU(input_size=inp_size,hidden_size=hid_size,num_layers=1,bias=True,batch_first=True,dropout=dropout,bidirectional=True)
-        self.lin = nn.Linear(hid_size*2,natt)
-        self.att_w = nn.Linear(natt,1,bias=False)
-        self.tanh = nn.Tanh()
+
+        self.att_w = nn.Linear(natt,1,bias=False) # v transpose is here
+
+        self.att_u = nn.Linear(inp_size,natt,bias=False)
+        self.att_h = nn.Linear(natt,natt,bias = False)
+        self.att_i = nn.Linear(inp_size,natt) # holds the bias of tanh(w_h*h+w_u*u+w_i*i + b)
+        
 
     
-    def forward(self, packed_batch):
+    def forward(self, packed_batch,user_embs,item_embs):
         
         rnn_sents,_ = self.gru(packed_batch)
         enc_sents,len_s = torch.nn.utils.rnn.pad_packed_sequence(rnn_sents)
-        emb_h = self.tanh(self.lin(enc_sents.view(enc_sents.size(0)*enc_sents.size(1),-1)))  # Nwords * Emb
 
-        attend = self.att_w(emb_h).view(enc_sents.size(0),enc_sents.size(1)).transpose(0,1)
-        all_att = self._masked_softmax(attend,self._list_to_bytemask(list(len_s))).transpose(0,1) # attW,sent 
-        attended = all_att.unsqueeze(2).expand_as(enc_sents) * enc_sents
+        sum_ue = self.att_u(user_embs) + self.att_i(item_embs)
 
+        transformed_h = self.att_h(enc_sents.view(enc_sents.size(0)*enc_sents.size(1),-1))
+        summed = F.tanh(sum_ue + transformed_h.view(enc_sents.size()))
+        att = self.att_w(summed.view(summed.size(0)*summed.size(1),-1)).view(summed.size(0),summed.size(1)).transpose(0,1)
+        all_att = self._masked_softmax(att,self._list_to_bytemask(list(len_s))).transpose(0,1) # attW,sent 
+        attended = all_att.unsqueeze(-1) * enc_sents
         return attended.sum(0,True).squeeze(0)
 
     def forward_att(self, packed_batch):
@@ -54,6 +59,7 @@ class AttentionalBiGRU(nn.Module):
         return mask
     
     def _masked_softmax(self,mat,mask):
+
         exp = torch.exp(mat) * Variable(mask,requires_grad=False)
         sum_exp = exp.sum(1,True)+0.0001
      
@@ -70,11 +76,11 @@ class HierarchicalDoc(nn.Module):
         self.users = nn.Embedding(nusers, emb_size)
         self.items = nn.Embedding(nitems, emb_size)
 
-        self.word = AttentionalBiGRU(emb_size, hid_size)
-        self.sent = AttentionalBiGRU(hid_size*2, hid_size)
+        self.word = AttentionalBiGRU(emb_size, emb_size//2)
+        self.sent = AttentionalBiGRU(emb_size, emb_size//2)
 
         self.emb_size = emb_size
-        self.lin_out = nn.Linear(hid_size*2,num_class)
+        self.lin_out = nn.Linear(emb_size,num_class)
         self.register_buffer("reviews",torch.Tensor())
 
 
@@ -98,29 +104,39 @@ class HierarchicalDoc(nn.Module):
         
         revs = Variable(self._buffers["reviews"].resize_(len(builder),len(builder[list_r[0]]),sents.size(1)).fill_(0), requires_grad=False)
         lens = []
-        real_order = []
+        review_order = []
         
         for i,x in enumerate(list_r):
             revs[i,0:len(builder[x]),:] = sents[builder[x],:]
             lens.append(len(builder[x]))
-            real_order.append(x)
+            review_order.append(x)
 
-        real_order = sorted(range(len(real_order)), key=lambda k: real_order[k])
+        real_order = sorted(range(len(review_order)), key=lambda k: review_order[k])
         
-        return revs,lens,real_order
+        return revs,lens,real_order,review_order
         
     
-    def forward(self, batch_reviews,stats):
+    def forward(self, batch_reviews,users,items,stats):
         ls,lr,rn,sn = zip(*stats)
         emb_w = F.dropout(self.embed(batch_reviews),training=self.training)
+        emb_u = F.dropout(self.users(users),training=self.training)
+        emb_i = F.dropout(self.items(items),training=self.training)
         
         packed_sents = torch.nn.utils.rnn.pack_padded_sequence(emb_w, ls,batch_first=True)
-        sent_embs = self.word(packed_sents)
+
+        reordered_u = emb_u[rn,:]
+        reordered_i = emb_i[rn,:]
+        sent_embs = self.word(packed_sents,reordered_u,reordered_i)
         
-        rev_embs,lens,real_order = self._reorder_sent(sent_embs,zip(lr,rn,sn))
+
+        rev_embs,lens,real_order,review_order = self._reorder_sent(sent_embs,zip(lr,rn,sn))
 
         packed_rev = torch.nn.utils.rnn.pack_padded_sequence(rev_embs, lens,batch_first=True)
-        doc_embs = self.sent(packed_rev)
+
+        reordered_u = emb_u[review_order,:]
+        reordered_i = emb_i[review_order,:]
+
+        doc_embs = self.sent(packed_rev,reordered_u,reordered_i)
 
         final_emb = doc_embs[real_order,:]
         out = self.lin_out(final_emb)

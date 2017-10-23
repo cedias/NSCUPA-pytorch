@@ -98,8 +98,9 @@ class BucketSampler(Sampler):
     Evenly sample from bucket for datalen
     """
 
-    def __init__(self, dataset):
+    def __init__(self, dataset,field):
         self.dataset = dataset
+        self.field = field
         self.index_buckets = self._build_index_buckets()
         self.len = min([len(x) for x in self.index_buckets.values()])
 
@@ -118,7 +119,7 @@ class BucketSampler(Sampler):
             
     def _build_index_buckets(self):
         class_index = {}
-        for ind,cl in enumerate(self.dataset.field_gen(1)):
+        for ind,cl in enumerate(self.dataset.field_gen(self.field,True)):
             if cl not in class_index:
                 class_index[cl] = [ind]
             else:

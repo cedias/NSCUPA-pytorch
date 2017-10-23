@@ -22,7 +22,6 @@ from Data import TuplesListDataset, Vectorizer, BucketSampler
 import sys
 
 
-
 def checkpoint(epoch,net,output):
     model_out_path = output+"_epoch_{}.pth".format(epoch)
     torch.save(net, model_out_path)
@@ -146,7 +145,7 @@ def train(epoch,net,optimizer,dataset,criterion,cuda):
             
             data = tuple2var(data_tensors,(batch_t,r_t,u_t,i_t))
             optimizer.zero_grad()
-            out = net(data[0],stat)
+            out = net(data[0],data[2],data[3],stat)
             ok,per = accuracy(out,data[1])
             loss = criterion(out, data[1])
             epoch_loss += loss.data[0]
@@ -172,7 +171,7 @@ def test(epoch,net,dataset,cuda):
     with tqdm(total=len(dataset),desc="Evaluating") as pbar:
         for iteration, (batch_t,r_t,u_t,i_t, stat,rev) in enumerate(dataset):
             data = tuple2var(data_tensors,(batch_t,r_t,u_t,i_t))
-            out,att = net.forward_visu(data[0],stat)
+            out = net(data[0],data[2],data[3],stat)
 
             ok,per = accuracy(out,data[1])
             ok_all += per.data[0]
@@ -220,8 +219,8 @@ def main(args):
 
     user_mapping = train_set.set_mapping(0,offset=1) #creates user mapping
     item_mapping = train_set.set_mapping(1,offset=1) #creates item mapping
-    nusers = len(user_mapping)
-    nitems = len(item_mapping)
+    nusers = len(user_mapping)+1 #offset
+    nitems = len(item_mapping)+1 #offset
 
 
     classes = train_set.set_mapping(3) #creates class mapping
@@ -319,8 +318,9 @@ def main(args):
     torch.nn.utils.clip_grad_norm(net.parameters(), args.clip_grad)
 
 
-    for epoch in range(1, args.epochs + 1):
-        train(epoch,net,optimizer,dataloader,criterion,args.cuda)
+    for epoch0 in range(1, args.epochs + 1):
+        for epoch in range(1, args.epochs + 1):
+            train(epoch,net,optimizer,dataloader,criterion,args.cuda)
         
 
         if args.snapshot:
