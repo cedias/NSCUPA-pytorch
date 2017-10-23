@@ -46,8 +46,6 @@ def check_memory(emb_size,max_sents,max_words,b_size,cuda):
         print("Not enough memory to handle current settings {} ".format(e_size))
         print("Try lowering sentence size and length.")
         sys.exit()
-    
-    
 
 
 def load_embeddings(file):
@@ -96,7 +94,7 @@ def save(net,dic,path):
 def tuple_batcher_builder(vectorizer, trim=True):
 
     def tuple_batch(l):
-        review,rating = zip(*l)
+        *newstuff, review,rating = zip(*l)
         r_t = torch.Tensor(rating).long()
         list_rev = vectorizer.vectorize_batch(review,trim)
 
@@ -198,8 +196,8 @@ def accuracy(out,truth):
     return all_eq, all_eq/truth.size(0)*100
 
 def main(args):
-    print(32*"-"+"\nHierarchical Attention Network:\n" + 32*"-")
 
+    print(32*"-"+"\nHierarchical Attention Network:\n" + 32*"-")
     print("\nLoading Data:\n" + 25*"-")
 
     max_features = args.max_feat
@@ -218,28 +216,30 @@ def main(args):
     print("Train set length:",len(train_set))
     print("Test set length:",len(test_set))
 
-    classes = train_set.get_class_dict(1)
+    classes = train_set.get_class_dict(3)
+    test_set.set_class_mapping(3,classes) #set same class mapping
     num_class = len(classes)
-
     
     print(25*"-"+"\nClass stats:\n" + 25*"-")
     print("Train set:\n" + 10*"-")
 
-    class_stats,class_per = train_set.get_stats(1)
+    class_stats,class_per = train_set.get_stats(3)
     print(class_stats)
     print(class_per)
 
-    class_weight = torch.zeros(len(class_per))
-    for c,p in class_per.items():
-        class_weight[c] = 1-p 
-    print(class_weight)
+    if args.weight_classes:
+        class_weight = torch.zeros(num_class)
+        for c,p in class_per.items():
+            class_weight[c] = 1-p 
 
-    if args.cuda:
-        class_weight = class_weight.cuda()
+        print(class_weight)
+
+        if args.cuda:
+            class_weight = class_weight.cuda()
 
     print(10*"-" + "\n Test set:\n" + 10*"-")
     
-    test_stats,test_per = test_set.get_stats(1)
+    test_stats,test_per = test_set.get_stats(3)
     print(test_stats) 
     print(test_per)
 
@@ -263,7 +263,7 @@ def main(args):
             net.set_emb_tensor(torch.FloatTensor(tensor))
             vectorizer.word_dict = dic
         else:
-            vectorizer.build_dict(train_set.field_iter(0),args.max_feat)
+            vectorizer.build_dict(train_set.field_iter(2),args.max_feat)
             net = HierarchicalDoc(ntoken=len(vectorizer.word_dict), emb_size=args.emb_size,hid_size=args.hid_size, num_class=num_class)
 
 
@@ -274,8 +274,8 @@ def main(args):
     
     sampler = None
     if args.balance:
-        sampler =  BucketSampler(train_set)
-        sampler_t = BucketSampler(test_set)
+        sampler = BucketSampler(train_set,3)
+        sampler_t = BucketSampler(test_set,3)
 
 
         dataloader = DataLoader(train_set, batch_size=args.b_size, shuffle=False, sampler=sampler, num_workers=2, collate_fn=tuple_batch,pin_memory=True)
@@ -285,7 +285,10 @@ def main(args):
         dataloader_test = DataLoader(test_set, batch_size=args.b_size, shuffle=True, num_workers=2, collate_fn=tuple_batch_test)
 
 
-    criterion = torch.nn.CrossEntropyLoss(weight=class_weight)
+    if args.weight_classes:
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weight)
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
       
 
 
@@ -323,6 +326,7 @@ if __name__ == '__main__':
     parser.add_argument("--split", type=int, default=0)
     parser.add_argument("--emb-size",type=int,default=200)
     parser.add_argument("--hid-size",type=int,default=50)
+    parser.add_argument("--weight-classes", action='store_true')
     parser.add_argument("--b-size", type=int, default=32)
     parser.add_argument("--max-feat", type=int,default=10000)
     parser.add_argument("--epochs", type=int,default=10)

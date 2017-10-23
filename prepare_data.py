@@ -16,6 +16,9 @@ import torch
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO) #gensim logging
 
+#Global dicts for users
+USERS = {}
+ITEMS = {}
 
 def count_lines(file):
     count = 0
@@ -29,10 +32,18 @@ def build_dataset(args):
 
     def preprocess(datas):
         for data in datas:
-            yield (data['reviewText'],max(1,int(round(float(data["overall"]))))-1) #zero is useless, classes between 0-4 for 1-5 reviews
+
+            uk = USERS.setdefault(data["reviewerID"], len(USERS))
+            ik = ITEMS.setdefault(data["asin"], len(ITEMS))
+
+            yield (uk,ik,data['reviewText'],max(1,int(round(float(data["overall"]))))-1) #zero is useless, classes between 0-4 for 1-5 reviews
 
     def preprocess_rescale(datas):
         for data in datas:
+
+            uk = USERS.setdefault(data["reviewerID"], len(USERS))
+            ik = ITEMS.setdefault(data["asin"], len(ITEMS))
+
             rating = max(1,int(round(float(data["overall"]))))-1
 
             if rating > 3:
@@ -42,7 +53,7 @@ def build_dataset(args):
                 continue
             else:
                 rating = 0
-            yield (data['reviewText'],rating) #zero is useless
+            yield (uk, ik, data['reviewText'],rating) #zero is useless
 
     def data_generator(data):
         with gzip.open(args.input,"r") as f:
@@ -97,7 +108,7 @@ def build_dataset(args):
     print("Split distribution is the following:")
     print(count)
 
-    return {"data":data,"splits":splits,"rows":("review","rating")}
+    return {"data":data,"splits":splits,"rows":("user_id","item_id","review","rating")}
 
 
 def main(args):
