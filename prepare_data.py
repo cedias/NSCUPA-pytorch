@@ -86,7 +86,7 @@ def build_dataset(args):
 
     nlp = spacy.load('en')
 
-    tokenized = [tok for tok in tqdm(nlp.tokenizer.pipe((x["reviewText"] for x in data_generator(args.input)),batch_size=10000, n_threads=8),desc="Tokenizing")]
+    tokenized = [tok for tok in tqdm(nlp.tokenizer.pipe((x["reviewText"] for x in data_generator(args.input)), batch_size=10000, n_threads=8),desc="Tokenizing")]
 
     
 

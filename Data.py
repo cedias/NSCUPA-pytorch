@@ -25,46 +25,60 @@ class TuplesListDataset(Dataset):
     def __init__(self, tuplelist):
         super(TuplesListDataset, self).__init__()
         self.tuplelist = tuplelist
-        self.data2class = None
-        self.class_field = None
+        self.mappings = {}
 
     def __len__(self):
         return len(self.tuplelist)
 
     def __getitem__(self,index):
-        if self.data2class is None:
+        if len(self.mappings) == 0:
             return self.tuplelist[index]
         else:
             t = list(self.tuplelist[index])
-            t[self.class_field] = self.data2class[t[self.class_field]]
+
+            for i,m in self.mappings.items():
+                t[i] = m[t[i]]
+
             return tuple(t)
 
-    def field_iter(self,field):
+    def __iter__(self):
+        return self.tuplelist.__iter__()
 
-        def field_iterator():
+
+    def field_gen(self,field,transform=False):
+        if transform:
             for i in range(len(self)):
                 yield self[i][field]
-
-        return field_iterator
+        else:
+            for x in self:
+                yield x[field]
 
 
     def get_stats(self,field):
-        d =  dict(Counter(self.field_iter(field)()))
+        d =  dict(Counter(self.field_gen(field)))
         sumv = sum([v for k,v in d.items()])
         class_per = {k:(v/sumv) for k,v  in d.items()}
 
         return d,class_per
 
-    def get_class_dict(self,field):
-        self.class_field = field
-        self.class2data = {i:c for i,c in enumerate(sorted(list(set(self.field_iter(field)()))))}
-        self.data2class = {c:i for i,c in self.class2data.items()}
-        return self.class2data
+    def get_field_dict(self,field,offset=0):
+        d2k = {c:i for i,c in enumerate(set(self.field_gen(field)),offset)}
+        return d2k
 
-    def set_class_mapping(self,field,mapping):
-        self.class_field = field
-        self.class2data = mapping
-        self.data2class = {c:i for i,c in self.class2data.items()}
+    def set_mapping(self,field,mapping=None,offset=0, unk=None):
+        """
+        Sets or creates a mapping for a tuple field. Mappings are {k:v} with keys starting at offset.
+        """
+        if mapping is None:
+            mapping = self.get_field_dict(field,offset)
+
+        else:
+            if unk is not None:
+                mapping.update(((uk,unk) for uk in set(self.field_gen(field)) if uk not in mapping))
+            
+        self.mappings[field] = mapping
+
+        return mapping
 
     @staticmethod
     def build_train_test(datatuples,splits,split_num=0):
@@ -90,11 +104,9 @@ class BucketSampler(Sampler):
         self.len = min([len(x) for x in self.index_buckets.values()])
 
     def __iter__(self):
-
         return iter(self.bucket_iterator())
 
     def __len__(self):
-
         return self.len
 
     def bucket_iterator(self):
@@ -106,7 +118,7 @@ class BucketSampler(Sampler):
             
     def _build_index_buckets(self):
         class_index = {}
-        for ind,cl in enumerate(self.dataset.field_iter(1)()):
+        for ind,cl in enumerate(self.dataset.field_gen(1)):
             if cl not in class_index:
                 class_index[cl] = [ind]
             else:
@@ -126,7 +138,7 @@ class Vectorizer():
 
 
     def _get_words_dict(self,data,max_words):
-        word_counter = Counter(w.lower_ for d in self.nlp.tokenizer.pipe((doc for doc in tqdm(data(),desc="Tokenizing data"))) for w in d)
+        word_counter = Counter(w.lower_ for d in self.nlp.tokenizer.pipe((doc for doc in tqdm(data,desc="Tokenizing data"))) for w in d)
         dict_w =  {w: i for i,(w,_) in tqdm(enumerate(word_counter.most_common(max_words),start=2),desc="building word dict",total=max_words)}
         dict_w["_padding_"] = 0
         dict_w["_unk_word_"] = 1

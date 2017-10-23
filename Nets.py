@@ -20,7 +20,6 @@ class AttentionalBiGRU(nn.Module):
         self.att_w = nn.Linear(natt,1,bias=False)
         self.tanh = nn.Tanh()
 
-
     
     def forward(self, packed_batch):
         
@@ -64,10 +63,13 @@ class AttentionalBiGRU(nn.Module):
 
 class HierarchicalDoc(nn.Module):
 
-    def __init__(self, ntoken, num_class, emb_size=200, hid_size=50):
+    def __init__(self, ntoken, nusers, nitems, num_class, emb_size=200, hid_size=50):
         super(HierarchicalDoc, self).__init__()
 
-        self.embed = nn.Embedding(ntoken, emb_size,padding_idx=0)
+        self.embed = nn.Embedding(ntoken, emb_size, padding_idx=0)
+        self.users = nn.Embedding(nusers, emb_size)
+        self.items = nn.Embedding(nitems, emb_size)
+
         self.word = AttentionalBiGRU(emb_size, hid_size)
         self.sent = AttentionalBiGRU(hid_size*2, hid_size)
 

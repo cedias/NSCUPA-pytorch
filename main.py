@@ -94,8 +94,10 @@ def save(net,dic,path):
 def tuple_batcher_builder(vectorizer, trim=True):
 
     def tuple_batch(l):
-        *newstuff, review,rating = zip(*l)
+        user,item,review,rating = zip(*l)
         r_t = torch.Tensor(rating).long()
+        u_t = torch.Tensor(user).long()
+        i_t = torch.Tensor(item).long()
         list_rev = vectorizer.vectorize_batch(review,trim)
 
         # sorting by sentence-review length
@@ -110,7 +112,7 @@ def tuple_batcher_builder(vectorizer, trim=True):
                 
         stat = [(ls,lr,r_n,s_n) for ls,lr,r_n,s_n,_ in stat]
         
-        return batch_t,r_t, stat,review
+        return batch_t,r_t,u_t,i_t,stat,review
 
     return tuple_batch
 
@@ -137,12 +139,12 @@ def new_tensors(n,cuda,types={}):
 def train(epoch,net,optimizer,dataset,criterion,cuda):
     epoch_loss = 0
     ok_all = 0
-    data_tensors = new_tensors(2,cuda,types={0:torch.LongTensor,1:torch.LongTensor}) #data-tensors
+    data_tensors = new_tensors(4,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor,3:torch.LongTensor}) #data-tensors
 
     with tqdm(total=len(dataset),desc="Training") as pbar:
-        for iteration, (batch_t,r_t,stat,rev) in enumerate(dataset):
+        for iteration, (batch_t,r_t, u_t, i_t,stat,rev) in enumerate(dataset):
             
-            data = tuple2var(data_tensors,(batch_t,r_t))
+            data = tuple2var(data_tensors,(batch_t,r_t,u_t,i_t))
             optimizer.zero_grad()
             out = net(data[0],stat)
             ok,per = accuracy(out,data[1])
@@ -166,10 +168,10 @@ def test(epoch,net,dataset,cuda):
     ok_all = 0
     pred = 0
     skipped = 0
-    data_tensors = new_tensors(2,cuda,types={0:torch.LongTensor,1:torch.LongTensor}) #data-tensors
+    data_tensors = new_tensors(4,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor,3:torch.LongTensor}) #data-tensors
     with tqdm(total=len(dataset),desc="Evaluating") as pbar:
-        for iteration, (batch_t,r_t, stat,rev) in enumerate(dataset):
-            data = tuple2var(data_tensors,(batch_t,r_t))
+        for iteration, (batch_t,r_t,u_t,i_t, stat,rev) in enumerate(dataset):
+            data = tuple2var(data_tensors,(batch_t,r_t,u_t,i_t))
             out,att = net.forward_visu(data[0],stat)
 
             ok,per = accuracy(out,data[1])
@@ -216,9 +218,21 @@ def main(args):
     print("Train set length:",len(train_set))
     print("Test set length:",len(test_set))
 
-    classes = train_set.get_class_dict(3)
-    test_set.set_class_mapping(3,classes) #set same class mapping
+    user_mapping = train_set.set_mapping(0,offset=1) #creates user mapping
+    item_mapping = train_set.set_mapping(1,offset=1) #creates item mapping
+    nusers = len(user_mapping)
+    nitems = len(item_mapping)
+
+
+    classes = train_set.set_mapping(3) #creates class mapping
+    test_set.set_mapping(3,classes) #set same class mapping
+    test_set.set_mapping(0,user_mapping,unk=0) #sets same user mapping
+    test_set.set_mapping(1,item_mapping,unk=0) #sets same item mapping
+
     num_class = len(classes)
+
+    print("{} users and {} items in train dataset".format(nusers-1,nitems-1))
+    
     
     print(25*"-"+"\nClass stats:\n" + 25*"-")
     print("Train set:\n" + 10*"-")
@@ -251,7 +265,7 @@ def main(args):
     if args.load:
         state = torch.load(args.load)
         vectorizer.word_dict = state["word_dic"]
-        net = HierarchicalDoc(ntoken=len(state["word_dic"]),emb_size=state["embed.weight"].size(1),hid_size=state["sent.gru.weight_hh_l0"].size(1),num_class=state["lin_out.weight"].size(0))
+        net = HierarchicalDoc(ntoken=len(state["word_dic"]), nusers=nusers, nitems=nitems ,emb_size=state["embed.weight"].size(1),hid_size=state["sent.gru.weight_hh_l0"].size(1),num_class=state["lin_out.weight"].size(0))
         del state["word_dic"]
         net.load_state_dict(state)
     else:
@@ -259,12 +273,12 @@ def main(args):
         if args.emb:
             tensor,dic = load_embeddings(args.emb)
             print(len(dic))
-            net = HierarchicalDoc(ntoken=len(dic),emb_size=len(tensor[1]),hid_size=args.hid_size,num_class=num_class)
+            net = HierarchicalDoc(ntoken=len(dic), nusers=nusers, nitems=nitems ,emb_size=len(tensor[1]),hid_size=args.hid_size,num_class=num_class)
             net.set_emb_tensor(torch.FloatTensor(tensor))
             vectorizer.word_dict = dic
         else:
-            vectorizer.build_dict(train_set.field_iter(2),args.max_feat)
-            net = HierarchicalDoc(ntoken=len(vectorizer.word_dict), emb_size=args.emb_size,hid_size=args.hid_size, num_class=num_class)
+            vectorizer.build_dict(train_set.field_gen(2),args.max_feat)
+            net = HierarchicalDoc(ntoken=len(vectorizer.word_dict), nusers=nusers, nitems=nitems , emb_size=args.emb_size,hid_size=args.hid_size, num_class=num_class)
 
 
     tuple_batch = tuple_batcher_builder(vectorizer,trim=True)
