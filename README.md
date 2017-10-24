@@ -8,7 +8,7 @@ Pytorch implementation of Neural Sentiment Classification with User &amp; Produc
 - tqdm (for fancy graphics)
 
 #Scripts:
-
+- `minimal_ex(_cuda).sh` quick start scripts that does everything and starts learning (just `chmod +x` them).
 - `prepare_data.py` transforms gzip files as found on [Julian McAuley Amazon product data page](http://jmcauley.ucsd.edu/data/amazon/) to lists of `(user,item,review,rating)` tuples and builds word vectors if `--create-emb` option is specified.
 - `main.py` trains a Hierarchical Model.
 - `Data.py` holds data managing objects.
