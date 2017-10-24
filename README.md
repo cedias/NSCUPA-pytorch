@@ -1,5 +1,5 @@
-# HAN-UPA-pytorch
-Pytorch implementation of Neural Sentiment Classification with User &amp; Product Attention paper: https://aclweb.org/anthology/D16-1171
+# NSCUPA-pytorch
+a Pytorch implementation of [Neural Sentiment Classification with User &amp; Product Attention paper](https://aclweb.org/anthology/D16-1171): 
 
 ## Requirements
 - Pytorch (>= 0.2)
