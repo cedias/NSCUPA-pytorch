@@ -1,21 +1,14 @@
 import spacy
-import random
-import pickle as pkl
-import numpy as np
-import torch
-import itertools
 
-import torch.utils.data as data
-import torch.nn.functional as fn
-
-from torch.autograd import Variable
 from collections import Counter
-from tqdm import tqdm
-from itertools import groupby
 from operator import itemgetter
 from collections import OrderedDict
-import pickle as pkl
-from random import choice, random
+from random import choice
+from tqdm import tqdm
+
+import torch
+import torch.utils.data as data
+import torch.nn.functional as fn
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import Sampler
 

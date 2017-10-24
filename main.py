@@ -1,25 +1,18 @@
-
-import sys
 import argparse
-import torch
-import spacy
 import pickle as pkl
 import numpy as np
+from tqdm import tqdm
+
+import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as fn
-
 from torch.autograd import Variable
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.utils.data.sampler import Sampler
-from collections import Counter
-from tqdm import tqdm
-from operator import itemgetter
-from random import choice
-from collections import OrderedDict,Counter
+
 from Nets import HierarchicalDoc
 from Data import TuplesListDataset, Vectorizer, BucketSampler
-import sys
+
 
 
 def checkpoint(epoch,net,output):

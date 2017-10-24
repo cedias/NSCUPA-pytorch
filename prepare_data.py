@@ -1,18 +1,15 @@
+import spacy
 import gzip
-import pickle as pkl
 import argparse
-from tqdm import tqdm
-from random import randint
-from collections import Counter
-import sys
-import collections
 import gensim
 import logging
-import spacy
-import itertools
-import re
 import json
-import torch
+import pickle as pkl
+
+from tqdm import tqdm
+from random import randint
+from collections import Counter, Iterator
+
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO) #gensim logging
 
@@ -60,7 +57,7 @@ def build_dataset(args):
             for x in tqdm(f,desc="Reviews",total=count_lines(f)):
                 yield json.loads(x)
 
-    class TokIt(collections.Iterator):
+    class TokIt(Iterator):
         def __init__(self, tokenized):
             self.tok = tokenized
             self.x = 0
