@@ -162,13 +162,13 @@ def train(epoch,net,optimizer,dataset,criterion,cuda):
 
 
 
-def test(epoch,net,dataset,cuda):
+def test(epoch,net,dataset,cuda,msg="Evaluating"):
     epoch_loss = 0
     ok_all = 0
     pred = 0
     skipped = 0
     data_tensors = new_tensors(4,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor,3:torch.LongTensor}) #data-tensors
-    with tqdm(total=len(dataset),desc="Evaluating") as pbar:
+    with tqdm(total=len(dataset),desc=msg) as pbar:
         for iteration, (batch_t,r_t,u_t,i_t, stat,rev) in enumerate(dataset):
             data = tuple2var(data_tensors,(batch_t,r_t,u_t,i_t))
             out = net(data[0],data[2],data[3],stat)
@@ -181,7 +181,7 @@ def test(epoch,net,dataset,cuda):
             pbar.set_postfix({"acc":ok_all/pred, "skipped":skipped})
 
 
-    print("===> TEST Complete:  {}% accuracy".format(ok_all/pred))
+    print("===> {} Complete:  {}% accuracy".format(msg,ok_all/pred))
 
 def accuracy(out,truth):
     def sm(mat):
@@ -212,22 +212,26 @@ def main(args):
     else:
         print("Split #{} chosen".format(args.split))
 
-    train_set,test_set = TuplesListDataset.build_train_test(tuples,splits,args.split)
+    train_set,val_set,test_set = TuplesListDataset.build_train_test(tuples,splits,args.split,validation=500)
 
     print("Train set length:",len(train_set))
     print("Test set length:",len(test_set))
 
     user_mapping = train_set.set_mapping(0,offset=1) #creates user mapping
     item_mapping = train_set.set_mapping(1,offset=1) #creates item mapping
-    nusers = len(user_mapping)+1 #offset
-    nitems = len(item_mapping)+1 #offset
-
-
     classes = train_set.set_mapping(3) #creates class mapping
+
+    
+    val_set.set_mapping(3,classes) #set same class mapping
+    val_set.set_mapping(0,user_mapping,unk=0) #sets same user mapping
+    val_set.set_mapping(1,item_mapping,unk=0) #sets same item mapping
     test_set.set_mapping(3,classes) #set same class mapping
     test_set.set_mapping(0,user_mapping,unk=0) #sets same user mapping
     test_set.set_mapping(1,item_mapping,unk=0) #sets same item mapping
 
+
+    nusers = len(user_mapping)+1 #offset
+    nitems = len(item_mapping)+1 #offset
     num_class = len(classes)
 
     print("{} users and {} items in train dataset".format(nusers-1,nitems-1))
@@ -285,17 +289,17 @@ def main(args):
 
 
     
-    sampler = None
     if args.balance:
         sampler = BucketSampler(train_set,3)
-        sampler_t = BucketSampler(test_set,3)
-
 
         dataloader = DataLoader(train_set, batch_size=args.b_size, shuffle=False, sampler=sampler, num_workers=2, collate_fn=tuple_batch,pin_memory=True)
+        dataloader_valid = DataLoader(val_set, batch_size=args.b_size, shuffle=False,  num_workers=2, collate_fn=tuple_batch_test)
         dataloader_test = DataLoader(test_set, batch_size=args.b_size, shuffle=False,  num_workers=2, collate_fn=tuple_batch_test)
     else:
+
         dataloader = DataLoader(train_set, batch_size=args.b_size, shuffle=True, num_workers=2, collate_fn=tuple_batch,pin_memory=True)
-        dataloader_test = DataLoader(test_set, batch_size=args.b_size, shuffle=True, num_workers=2, collate_fn=tuple_batch_test)
+        dataloader_valid = DataLoader(val_set, batch_size=args.b_size, shuffle=False,  num_workers=2, collate_fn=tuple_batch_test)
+        dataloader_test = DataLoader(test_set, batch_size=args.b_size, shuffle=False, num_workers=2, collate_fn=tuple_batch_test)
 
 
     if args.weight_classes:
@@ -318,16 +322,16 @@ def main(args):
     torch.nn.utils.clip_grad_norm(net.parameters(), args.clip_grad)
 
 
-    for epoch0 in range(1, args.epochs + 1):
-        for epoch in range(1, args.epochs + 1):
-            train(epoch,net,optimizer,dataloader,criterion,args.cuda)
+    for epoch in range(1, args.epochs + 1):
+        train(epoch,net,optimizer,dataloader,criterion,args.cuda)
+        test(epoch,net,dataloader_valid,args.cuda,msg="Validation")
         
 
         if args.snapshot:
             print("snapshot of model saved as {}".format(args.save+"_snapshot"))
             save(net,vectorizer.word_dict,args.save+"_snapshot")
 
-    test(epoch,net,dataloader_test,args.cuda)
+        test(epoch,net,dataloader_test,args.cuda)
 
     if args.save:
         print("model saved to {}".format(args.save))

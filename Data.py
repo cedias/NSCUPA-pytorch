@@ -81,7 +81,7 @@ class TuplesListDataset(Dataset):
         return mapping
 
     @staticmethod
-    def build_train_test(datatuples,splits,split_num=0):
+    def build_train_test(datatuples,splits,split_num=0,validation=0):
         train,test = [],[]
 
         for split,data in tqdm(zip(splits,datatuples),total=len(datatuples),desc="Building train/test of split #{}".format(split_num)):
@@ -89,7 +89,18 @@ class TuplesListDataset(Dataset):
                 test.append(data)
             else:
                 train.append(data)
-        return TuplesListDataset(train),TuplesListDataset(test)
+
+        if validation > 0:
+
+            if 0 < validation < 1:
+                validation = int(validation * len(train))
+
+            train = train[:-validation]
+            validation = train[-validation:]
+
+            return TuplesListDataset(train),TuplesListDataset(validation),TuplesListDataset(test)
+
+        return TuplesListDataset(train),None,TuplesListDataset(test) #None for no pb
         
 
 
