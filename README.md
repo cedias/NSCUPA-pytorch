@@ -1,12 +1,18 @@
-# NSCUPA-pytorch
-a Pytorch implementation of [Neural Sentiment Classification with User &amp; Product Attention paper](https://aclweb.org/anthology/D16-1171): 
-
 -----------------
 
 ## Deprecated code
 A faster and up to date implementation is [in my other repo](https://github.com/cedias/Hierarchical-Sentiment)
 
 ----------------
+
+
+
+
+
+
+
+# NSCUPA-pytorch
+a Pytorch implementation of [Neural Sentiment Classification with User &amp; Product Attention paper](https://aclweb.org/anthology/D16-1171): 
 
 ### Requirements
 - Pytorch (>= 0.2)
