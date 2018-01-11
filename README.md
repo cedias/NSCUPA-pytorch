@@ -23,4 +23,4 @@ A faster and up to date implementation is [in my other repo](https://github.com/
 - `beer2json.py` is an helper script if you happen to have the ratebeer/beeradvocate datasets.
 
 ### Note:
-Currently, the whole dataset is used to create word embeddings which can be an issue. I'll modify this in some upcoming update.
+The whole dataset is used to create word embeddings which can be an issue.
